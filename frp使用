@@ -1,0 +1,156 @@
+下载安装
+wget https://github.com/fatedier/frp/releases/download/v0.29.0/frp_0.29.0_linux_amd64.tar.gz
+tar xvf frp_0.29.0_linux_amd64.tar.gz
+mv frp_0.29.0_linux_amd64 /usr/etc/frp #移动到自己想存放的目录
+
+vi /usr/etc/frp/frps.ini 修改如下
+
+[common]
+bind_addr=0.0.0.0
+bind_port = 7000
+vhost_http_port = 8880
+vhost_https_port = 8443
+token= #秘钥
+subdomain_host =  #域名
+
+dashboard_port = 7500 #管理端口
+dashboard_user = admin #用户
+dashboard_pwd = admin #密码
+
+执行：./frps -c ./frps.ini
+浏览器输入IP:7500，使用配置的用户密码登录，即可查看frp各状态。
+
+开机启动
+编辑frp脚本文件：
+vi /etc/systemd/system/frps.service
+
+[Unit]
+Description=Frps
+After=network.target
+
+[Service]
+Type=simple
+User=nobody
+Restart=on-failure
+RestartSec=5s
+ExecStart=/usr/etc/frp/frps -c /usr/etc/frp/frps.ini
+
+[Install]
+WantedBy=multi-user.target
+
+执行以下命令启动 frps 服务：
+
+systemctl enable frps
+systemctl start frps
+
+客户端搭建
+LINUX SSH配置
+下载安装方式和frps一样
+
+vi /usr/etc/frp/frpc.ini 修改如下
+
+[common]
+server_addr = frps服务端IP
+server_port = 7000
+token=
+[ssh]
+type = tcp
+local_port = 22 #SSH端口
+remote_port = 5000
+
+开机启动：vi /etc/systemd/system/frpc.service
+
+[Unit]
+Description=Frp Client Service
+After=network.target
+
+[Service]
+Type=simple
+User=nobody
+Restart=on-failure
+RestartSec=5s
+ExecStart=/usr/etc/frp/frpc -c /usr/etc/frp/frpc.ini
+ExecReload=/usr/etc/frp/frpc reload -c /usr/etc/frp/frpc.ini
+
+[Install]
+WantedBy=multi-user.target
+执行以下命令启动 frpc 服务：
+
+systemctl enable frpc
+systemctl start frpc
+
+然后通过XSHELL等软件，IP为frps服务器一致，端口为5000，
+
+远程桌面配置
+
+下载后解压到存放目录，如：D:\frpc\
+编辑frpc.ini
+
+[common]
+server_addr = 服务器IP
+server_port = 7000
+token=
+
+[远程桌面]
+type = tcp
+local_port = 3389
+remote_port = 53389
+
+下载WINSW：
+
+WIN7SP1以上的选择WinSW.NET4.exe
+
+重命名并复制到D:\frpc\WinSW.exe
+新建winsw.xml文件，修改为以下内容
+
+<service>
+    <id>frpc</id>
+    <name>frpc</name>
+    <description>frp内网穿透</description>
+    <executable>frpc</executable>
+    <arguments>-c frpc.ini</arguments>
+    <logmode>reset</logmode>
+</service>
+
+然后以管理员身份运行CMD，注意，不能使用powershell
+
+cd C:\Windows\Microsoft.NET\Framework\v4.0.30319
+InstallUtil D:\frpc\WinSW.exe
+d:
+cd frpc
+WinSW.exe install
+卸载：将最后改为WinSW.exe uninstall
+
+运行services.msc，可以看到frpc服务，启动，并设置属性-恢复，失败操作重新启动服务
+
+如果启动提示1067错误检查服务器端口是否开放
+依旧无法注入系统服务，可以使用VBS+BAT执行
+编辑frpc.bat放到D:\frpc目录，内容如下:
+
+@echo off
+set _interval=3
+start /b D:\frpc\frpc.exe -c D:\frpc\frpc.ini
+goto frpc
+
+编辑frpc.vbs放到C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp目录，内容如下：
+
+set ws=WScript.CreateObject("WScript.Shell")
+ws.Run "D:\frpc\frpc.bat /start",0
+
+双击frpc.vbs启动，该目录为开机启动，后期开机会自动运行
+
+运行mstsc打开远程桌面，输入服务器IP:58001，就可以远程win了
+
+路由器配置
+以梅林为例，软件中心安装frpc穿透，选择自定义配置，输入：
+
+[common]
+server_addr = 服务器IP
+server_port = 7000
+token=
+
+[路由器]
+type = http
+local_port = 80
+subdomain = web
+浏览器输入：web.xx.com:8880
